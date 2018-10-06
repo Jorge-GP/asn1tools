@@ -441,7 +441,8 @@ class Asn1Parser(tp.Parser):
         exception_spec = tp.Optional(Sequence('!', exception_identification))
 
         # X.680: 47. Subtype elements
-        pattern_constraint = Sequence('PATTERN', value)
+        pattern_constraint = tp.Tag('PatternConstraint',
+                                    Sequence('PATTERN', value))
         presence_constraint = tp.Optional(choice('PRESENT', 'ABSENT', 'OPTIONAL'))
         value_constraint = tp.Optional(constraint)
         component_constraint = Sequence(value_constraint, presence_constraint)
@@ -452,20 +453,23 @@ class Asn1Parser(tp.Parser):
         multiple_type_constraints = choice(full_specification,
                                            partial_specification)
         single_type_constraint = constraint
-        inner_type_constraints = choice(
-            Sequence('WITH', 'COMPONENT', single_type_constraint),
-            Sequence('WITH', 'COMPONENTS', multiple_type_constraints))
-        permitted_alphabet = Sequence('FROM', constraint)
-        type_constraint = type_
-        size_constraint = Sequence('SIZE', constraint)
+        inner_type_constraints = tp.Tag(
+            'InnerTypeConstraint',
+            choice(Sequence('WITH', 'COMPONENT', single_type_constraint),
+                   Sequence('WITH', 'COMPONENTS', multiple_type_constraints)))
+        permitted_alphabet = tp.Tag('PermittedAlphabet',
+                                    Sequence('FROM', constraint))
+        type_constraint = tp.Tag('TypeConstraint', type_)
+        size_constraint = tp.Tag('SizeConstraint', Sequence('SIZE', constraint))
         lower_end_value = choice(value, 'MIN')
         upper_end_value = choice(value, 'MAX')
         lower_endpoint = Sequence(lower_end_value, tp.Optional('<'))
         upper_endpoint = Sequence(tp.Optional('<'), upper_end_value)
-        value_range = Sequence(lower_endpoint, '..', upper_endpoint)
+        value_range = tp.Tag('ValueRange',
+                             Sequence(lower_endpoint, '..', upper_endpoint))
         includes = tp.Optional('INCLUDES')
-        contained_subtype = Sequence(includes, type_)
-        single_value = value
+        contained_subtype = tp.Tag('ContainedSubtype', Sequence(includes, type_))
+        single_value = tp.Tag('SingleValue', value)
         subtype_elements = choice(size_constraint,
                                   permitted_alphabet,
                                   value_range,
@@ -502,10 +506,11 @@ class Asn1Parser(tp.Parser):
         subtype_constraint = element_set_specs
         constraint_spec = choice(subtype_constraint, general_constraint)
         constraint <<= Sequence('(', constraint_spec, exception_spec, ')')
-        type_with_constraint = Sequence(choice('SET', 'SEQUENCE'),
-                                        choice(constraint, size_constraint),
-                                        'OF',
-                                        choice(type_, named_type))
+        type_with_constraint = tp.Tag('TypeWithConstraint',
+                                      Sequence(choice('SET', 'SEQUENCE'),
+                                               choice(constraint, size_constraint),
+                                               'OF',
+                                               choice(type_, named_type)))
 
         # X.680: 40. Definition of unrestricted character string types
         unrestricted_character_string_type = Sequence('CHARACTER', 'STRING')
@@ -555,8 +560,9 @@ class Asn1Parser(tp.Parser):
         # X.680: 36. Notation for character string types
         character_string_value = choice(restricted_character_string_value,
                                         unrestricted_character_string_value)
-        character_string_type = choice(restricted_character_string_type,
-                                       unrestricted_character_string_type)
+        character_string_type = tp.Tag('CharacterStringType',
+                                       choice(restricted_character_string_type,
+                                       unrestricted_character_string_type))
 
         # X.680: 35. The character string types
 
@@ -590,7 +596,8 @@ class Asn1Parser(tp.Parser):
         object_identifier_value = choice(
             Sequence('{', obj_id_components_list, '}'),
             Sequence('{', defined_value, obj_id_components_list, '}'))
-        object_identifier_type = Sequence('OBJECT', 'IDENTIFIER')
+        object_identifier_type = tp.Tag('ObjectIdentifierType',
+                                        Sequence('OBJECT', 'IDENTIFIER'))
 
         # X.680: 30. Notation for tagged types
         # tagged_value = NoMatch()
@@ -615,10 +622,11 @@ class Asn1Parser(tp.Parser):
                                  extension_and_exception,
                                  extension_addition_alternatives,
                                  optional_extension_marker)))
-        choice_type = Sequence('CHOICE',
-                               '{',
-                               alternative_type_lists,
-                               '}')
+        choice_type = tp.Tag('ChoiceType',
+                             Sequence('CHOICE',
+                                      '{',
+                                      alternative_type_lists,
+                                      '}'))
         choice_value = Sequence(identifier, ':', value)
 
         # X.680: 27. Notation for the set-of types
@@ -626,17 +634,20 @@ class Asn1Parser(tp.Parser):
 
         # X.680: 26. Notation for the set types
         # set_value = NoMatch()
-        set_type = Sequence(
-            'SET',
-            '{',
-            tp.Optional(choice(component_type_lists,
-                               Sequence(extension_and_exception,
-                                        optional_extension_marker))),
-            '}')
+        set_type = tp.Tag('SetType',
+                          Sequence(
+                              'SET',
+                              '{',
+                              tp.Optional(choice(component_type_lists,
+                                                 Sequence(extension_and_exception,
+                                                          optional_extension_marker))),
+                              '}'))
 
         # X.680: 25. Notation for the sequence-of types
         sequence_of_value = tp.NoMatch()
-        sequence_of_type = Sequence('SEQUENCE', 'OF', choice(type_, named_type))
+        sequence_of_type = tp.Tag('SequenceOfType',
+                                  Sequence('SEQUENCE', 'OF',
+                                           choice(type_, named_type)))
 
         # X.680: 24. Notation for the sequence types
         component_value_list = DelimitedList(named_value)
@@ -676,22 +687,24 @@ class Asn1Parser(tp.Parser):
                                      ',',
                                      root_component_type_list),
                             optional_extension_marker)))
-        sequence_type = Sequence('SEQUENCE',
-                                 '{',
-                                 tp.Optional(choice(component_type_lists,
-                                                    Sequence(extension_and_exception,
-                                                             optional_extension_marker))),
-                                 '}')
+        sequence_type = tp.Tag('SequenceType',
+                               Sequence('SEQUENCE',
+                                        '{',
+                                        tp.Optional(choice(component_type_lists,
+                                                           Sequence(extension_and_exception,
+                                                                    optional_extension_marker))),
+                                        '}'))
 
         # X.680: 23. Notation for the null type
         null_value = 'NULL'
-        null_type = 'NULL'
+        null_type = tp.Tag('NullType', 'NULL')
 
         # X.680: 22. Notation for the octetstring type
         # octet_string_value = choice('BSTRING',
         #                       'HSTRING',
         #                       Sequence('CONTAINING', value))
-        octet_string_type = Sequence('OCTET', 'STRING')
+        octet_string_type = tp.Tag('OctetStringType',
+                                   Sequence('OCTET', 'STRING'))
 
         # X.680: 21. Notation for the bitstring type
         bit_string_value = choice('BSTRING',
@@ -700,24 +713,26 @@ class Asn1Parser(tp.Parser):
                                            tp.Optional(DelimitedList(identifier)),
                                            '}'))
         named_bit = Sequence('IDENT', '(', choice(number, defined_value), ')')
-        bit_string_type = Sequence('BIT', 'STRING',
-                                   tp.Optional(Sequence('{',
-                                                        DelimitedList(named_bit),
-                                                        '}')))
+        bit_string_type = tp.Tag('BitStringType',
+                                 Sequence('BIT', 'STRING',
+                                          tp.Optional(Sequence('{',
+                                                               DelimitedList(named_bit),
+                                                               '}'))))
 
         tag = Sequence('[',
                        tp.Optional(choice('UNIVERSAL', 'APPLICATION', 'PRIVATE')),
                        number,
                        ']')
-        tagged_type = Sequence(tag,
-                               tp.Optional(choice('IMPLICIT', 'EXPLICIT')),
-                               type_)
+        tagged_type = tp.Tag('TaggedType',
+                             Sequence(tag,
+                                      tp.Optional(choice('IMPLICIT', 'EXPLICIT')),
+                                      type_))
 
         # X.680: 20. Notation for the real type
         special_real_value = choice('PLUS-INFINITY', 'MINUS-INFINITY')
         numeric_real_value = choice(real_number, sequence_value)
         real_value = choice(numeric_real_value, special_real_value)
-        real_type = 'REAL'
+        real_type = tp.Tag('RealType', 'REAL')
 
         # X.680: 19. Notation for the enumerated type
         enumerated_value = identifier
@@ -730,7 +745,8 @@ class Asn1Parser(tp.Parser):
             tp.Optional(Sequence(',', '...', exception_spec,
                                  tp.Optional(
                                      Sequence(',', additional_enumeration)))))
-        enumerated_type = Sequence('ENUMERATED', '{', enumerations, '}')
+        enumerated_type = tp.Tag('EnumeratedType',
+                                 Sequence('ENUMERATED', '{', enumerations, '}'))
 
         # X.680: 18. Notation for the integer type
         integer_value = choice(signed_number, identifier)
@@ -739,14 +755,15 @@ class Asn1Parser(tp.Parser):
                                   '(',
                                   choice(signed_number, defined_value),
                                   ')')
-        integer_type = Sequence('INTEGER',
-                                tp.Optional(Sequence('{',
-                                                     DelimitedList(named_number),
-                                                     '}')))
+        integer_type = tp.Tag('IntegerType',
+                              Sequence('INTEGER',
+                                       tp.Optional(Sequence('{',
+                                                            DelimitedList(named_number),
+                                                            '}'))))
 
         # X.680: 17. Notation for the boolean type
         boolean_value = choice('TRUE', 'FALSE')
-        boolean_type = 'BOOLEAN'
+        boolean_type = tp.Tag('BooleanType', 'BOOLEAN')
 
         any_defined_by_type = Sequence('ANY', 'DEFINED', 'BY', value_reference)
 
@@ -787,22 +804,25 @@ class Asn1Parser(tp.Parser):
                               object_identifier_type,
                               tagged_type,
                               any_defined_by_type,
-                              'ANY')
+                              'ANY',
+                              'EXTERNAL')
         named_type <<= Sequence('IDENT', type_)
-        referenced_type = type_reference
+        referenced_type = tp.Tag('ReferencedType', type_reference)
         type_ <<= choice(Sequence(choice(builtin_type, referenced_type),
                                   tp.ZeroOrMore(constraint)),
                          type_with_constraint)
 
         # X.680: 15. Assigning types and values
-        parameterized_value_assignment = Sequence(value_reference,
-                                                  type_,
-                                                  '::=',
-                                                  value)
-        parameterized_type_assignment = Sequence(type_reference,
-                                                 parameter_list,
-                                                 '::=',
-                                                 type_)
+        parameterized_value_assignment = tp.Tag('ParameterizedValueAssignment',
+                                                Sequence(value_reference,
+                                                         type_,
+                                                         '::=',
+                                                         value))
+        parameterized_type_assignment = tp.Tag('ParameterizedTypeAssignment',
+                                               Sequence(type_reference,
+                                                        parameter_list,
+                                                        '::=',
+                                                        type_))
 
         # X.680: 14. Notation to support references to ASN.1 components
 
@@ -878,6 +898,148 @@ class Asn1Parser(tp.Parser):
                                      'END')
 
         return tp.OneOrMore(module_definition)
+
+
+from pprint import pprint
+
+
+class Transformer(object):
+
+    def __init__(self):
+        self._modules = None
+        self._lookup_modules = None
+
+    def transform(self, parse_tree):
+        self.setup_lookup_modules(parse_tree)
+        self._modules = {}
+        
+        for module_definition in parse_tree:
+            module_name = module_definition[0][0].value
+            types = self._lookup_modules[module_name]['types']
+            
+            for type_name, type_ in types.items():
+                self.transform_type(type_name, type_, module_name)
+
+        return self._modules
+        
+    def setup_lookup_modules(self, parse_tree):
+        self._lookup_modules = {}
+
+        for module_definition in parse_tree:
+            imports, assignment_list = module_definition[6][1:]
+            types = {}
+            values = {}
+
+            for tag, assignment in assignment_list:
+                if tag == 'ParameterizedTypeAssignment':
+                    types[assignment[0].value] = assignment[3]
+                elif tag == 'ParameterizedValueAssignment':
+                    values[assignment[0].value] = assignment[3]
+                else:
+                    pass
+
+            module_name = module_definition[0][0].value
+
+            self._lookup_modules[module_name] = {
+                'imports': imports,
+                'types': types,
+                'values': values
+            }
+
+    def transform_type(self, type_name, type_, module_name):
+        tag = type_[0][0]
+
+        try:
+            {
+                'BooleanType': self.transform_boolean_type,
+                'IntegerType': self.transform_integer_type,
+                'RealType': self.transform_real_type,
+                'TaggedType': self.transform_tagged_type,
+                'ChoiceType': self.transform_choice_type,
+                'NullType': self.transform_null_type,
+                'BitStringType': self.transform_bit_string_type,
+                'OctetStringType': self.transform_octet_string_type,
+                'EnumeratedType': self.transform_enumerated_type,
+                'CharacterStringType': self.transform_character_string_type,
+                'ObjectClassFieldType': self.transform_object_class_field_type,
+                'SequenceType': self.transform_sequence_type,
+                'SetType': self.transform_set_type,
+                'SequenceOfType': self.transform_sequence_of_type,
+                'SetOfType': self.transform_set_of_type,
+                'ObjectIdentifierType': self.transform_object_identifier_type,
+                'TaggedType': self.transform_tagged_type,
+                'AnyDefinedByType': self.transform_any_defined_by_type,
+                'ReferencedType': self.transform_referenced_type,
+                'TypeWithConstraint': self.transform_type_with_constraint
+            }[tag](type_name, type_, module_name)
+        except KeyError:
+            pass
+
+    def transform_parameterized_value_assignment(self, type_name, type_, module_name):
+        pass
+
+    def transform_boolean_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_integer_type(self, type_name, type_, module_name):
+        print()
+        pprint(type_name)
+
+        constraints = type_[1]
+        
+        for constraint in constraints:
+            pprint(constraint)
+
+    def transform_real_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_tagged_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_choice_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_null_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_bit_string_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_octet_string_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_enumerated_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_character_string_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_object_class_field_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_sequence_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_set_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_sequence_of_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_set_of_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_object_identifier_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_any_defined_by_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_referenced_type(self, type_name, type_, module_name):
+        pass
+
+    def transform_type_with_constraint(self, type_name, type_, module_name):
+        pass
 
 
 class ParseError(Error):
@@ -2558,7 +2720,8 @@ def parse_string(string):
     """
 
     try:
-        Asn1Parser().parse(string)
+        parse_tree = Asn1Parser().parse(string, token_tree=True)
+        modules = Transformer().transform(parse_tree)
     except tp.ParseError as e:
         raise ParseError("Invalid ASN.1 syntax at line {}, column {}: '{}'.".format(
             e.line,
